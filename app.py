@@ -11,7 +11,7 @@ products = [
         "description": "Beautifully crafted ceramic vase.",
         "cost": "₹25",
         "manufacturer": "Crafts by Kusuma",
-        "image": "https://i.imgur.com/8Km9tLL.png"
+        "image": "https://mumbaisplash.blogspot.com/search/label/vase"
     },
     {
         "name": "Woven Basket",
@@ -175,4 +175,5 @@ def seller():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
