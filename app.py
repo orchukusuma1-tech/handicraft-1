@@ -1,135 +1,188 @@
-from flask import Flask, render_template_string, request, redirect, url_for, session
+from flask import Flask, request, redirect, url_for, flash, render_template_string
+import os
 
 app = Flask(__name__)
-app.secret_key = "supersecretkey"
+app.secret_key = os.urandom(24)
 
 # Sample product data
 products = [
-    {"name": "Handmade Vase", "description": "Beautiful ceramic vase", "cellular": "12345", "category": "Decor"},
-    {"name": "Wicker Basket", "description": "Durable handwoven basket", "cellular": "67890", "category": "Storage"},
-    {"name": "Clay Lamp", "description": "Eco-friendly clay lamp", "cellular": "11223", "category": "Lighting"},
-    {"name": "Wooden Bowl", "description": "Polished wooden bowl", "cellular": "44556", "category": "Kitchenware"},
+    {
+        "name": "Handmade Vase",
+        "description": "Beautifully crafted ceramic vase.",
+        "cost": "₹25",
+        "manufacturer": "Crafts by Kusuma",
+        "image": "https://i.imgur.com/8Km9tLL.png"
+    },
+    {
+        "name": "Woven Basket",
+        "description": "Durable and colorful basket for storage.",
+        "cost": "₹15",
+        "manufacturer": "Village Artisans",
+        "image": "https://i.imgur.com/Zr3r5xE.png"
+    }
 ]
 
-# Simple HTML templates using render_template_string for testing
-login_template = """
-<!doctype html>
-<title>Login</title>
-<h1>Login</h1>
+# Base template string
+base_html = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Handicraft Market</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Roboto', sans-serif; margin:0; padding:0; background: linear-gradient(120deg, #ffecd2, #fcb69f); }
+        header { background-color: #ff6f61; padding: 25px; text-align:center; color:white; font-size:2.5rem; font-weight:bold; text-shadow:2px 2px #333; }
+        nav { display:flex; justify-content:center; margin:15px; flex-wrap:wrap; }
+        nav a { margin:0 15px; text-decoration:none; color:#333; font-weight:bold; font-size:1.2rem; transition:0.3s; }
+        nav a:hover { color:#ff3b2e; }
+        .container { max-width:1200px; margin:20px auto; padding:0 20px; }
+        .product-grid { display:flex; flex-wrap:wrap; justify-content:space-around; }
+        .product-card { 
+            background: linear-gradient(145deg, #ffffff, #ffe6e1); 
+            border-radius:20px; 
+            box-shadow:0 8px 15px rgba(0,0,0,0.2); 
+            overflow:hidden; margin:20px; flex:1 1 300px; display:flex; flex-direction:column; transition: transform 0.4s, box-shadow 0.4s;
+        }
+        .product-card:hover { transform:translateY(-10px); box-shadow:0 15px 25px rgba(0,0,0,0.3); }
+        .product-image { height:220px; object-fit:cover; width:100%; }
+        .product-info { padding:15px; }
+        .product-info h3 { margin:0; color:#ff6f61; }
+        .product-info p { margin:5px 0; font-size:1rem; }
+        .product-info span { font-weight:bold; }
+        input[type="text"], input[type="number"], input[type="password"] { padding:10px; margin:5px 0; width:100%; border-radius:8px; border:1px solid #ccc; font-size:1rem; }
+        button { background-color:#ff6f61; color:white; border:none; padding:12px 25px; border-radius:12px; cursor:pointer; margin-top:10px; font-size:1rem; transition:0.3s; }
+        button:hover { background-color:#ff3b2e; }
+        .flash { padding:12px; border-radius:10px; margin:15px 0; font-weight:bold; font-size:1rem; }
+        .success { background-color:#d4edda; color:#155724; }
+        .danger { background-color:#f8d7da; color:#721c24; }
+        form { max-width:500px; margin:auto; }
+        @media(max-width:768px) { .product-grid { flex-direction:column; align-items:center; } }
+    </style>
+</head>
+<body>
+<header>Handicraft Market</header>
+<nav>
+    <a href="{{ url_for('home') }}">Home</a>
+    <a href="{{ url_for('seller') }}">Seller</a>
+    <a href="{{ url_for('login') }}">Login</a>
+</nav>
+<div class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="flash {{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+</div>
+</body>
+</html>
+"""
+
+# Home page
+home_html = """
+{% extends base_html %}
+{% block content %}
+<form method="get" action="{{ url_for('home') }}">
+    <input type="text" name="search" placeholder="Search products..." value="{{ search_query }}">
+    <button type="submit">Search</button>
+</form>
+<div class="product-grid">
+    {% for product in products %}
+    <div class="product-card">
+        <img src="{{ product.image }}" alt="{{ product.name }}" class="product-image">
+        <div class="product-info">
+            <h3>{{ product.name }}</h3>
+            <p><span>Description:</span> {{ product.description }}</p>
+            <p><span>Cost:</span> {{ product.cost }}</p>
+            <p><span>Manufacturer:</span> {{ product.manufacturer }}</p>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
+"""
+
+# Seller page
+seller_html = """
+{% extends base_html %}
+{% block content %}
+<h2 style="text-align:center; color:#ff6f61;">Add New Product</h2>
 <form method="post">
-    Username: <input name="username"><br>
-    Role: 
-    <select name="role">
-        <option value="buyer">Buyer</option>
-        <option value="seller">Seller</option>
-    </select><br>
-    <input type="submit" value="Login">
+    <input type="text" name="name" placeholder="Product Name" required>
+    <input type="text" name="description" placeholder="Description">
+    <input type="text" name="manufacturer" placeholder="Manufacturer">
+    <input type="text" name="cost" placeholder="Price in ₹" required>
+    <input type="text" name="image" placeholder="Image URL (optional)">
+    <button type="submit">Add Product</button>
 </form>
+<h2 style="text-align:center; color:#ff6f61; margin-top:40px;">Existing Products</h2>
+<div class="product-grid">
+    {% for product in products %}
+    <div class="product-card">
+        <img src="{{ product.image }}" alt="{{ product.name }}" class="product-image">
+        <div class="product-info">
+            <h3>{{ product.name }}</h3>
+            <p><span>Description:</span> {{ product.description }}</p>
+            <p><span>Cost:</span> {{ product.cost }}</p>
+            <p><span>Manufacturer:</span> {{ product.manufacturer }}</p>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
 """
 
-register_template = """
-<!doctype html>
-<title>Register</title>
-<h1>Register</h1>
+# Login page
+login_html = """
+{% extends base_html %}
+{% block content %}
+<h2 style="text-align:center; color:#ff6f61;">Login</h2>
 <form method="post">
-    Username: <input name="username"><br>
-    Role: 
-    <select name="role">
-        <option value="buyer">Buyer</option>
-        <option value="seller">Seller</option>
-    </select><br>
-    <input type="submit" value="Register">
+    <input type="text" name="username" placeholder="Username" required>
+    <input type="password" name="password" placeholder="Password" required>
+    <button type="submit">Login</button>
 </form>
+{% endblock %}
 """
 
-dashboard_template = """
-<!doctype html>
-<title>{{ role.capitalize() }} Dashboard</title>
-<h1>Welcome {{ username }} ({{ role }})</h1>
-<a href="{{ url_for('logout') }}">Logout</a>
-<h2>Products</h2>
-<form method="get" action="{{ url_for('search') }}">
-    <input type="text" name="query" placeholder="Search products">
-    <input type="submit" value="Search">
-</form>
-<ul>
-{% for product in products %}
-    <li><b>{{ product.name }}</b>: {{ product.description }} (Cell: {{ product.cellular }})</li>
-{% endfor %}
-</ul>
-"""
-
-search_template = """
-<!doctype html>
-<title>Search Results</title>
-<h1>Search Results for "{{ query }}"</h1>
-<a href="{{ url_for('home') }}">Back</a>
-<ul>
-{% for product in results %}
-    <li><b>{{ product.name }}</b>: {{ product.description }} (Cell: {{ product.cellular }})</li>
-{% endfor %}
-{% if results|length == 0 %}
-    <li>No products found.</li>
-{% endif %}
-</ul>
-"""
-
-# Root route redirects based on login status
-@app.route("/")
+@app.route('/')
 def home():
-    if "username" in session:
-        if session.get("role") == "buyer":
-            return redirect(url_for("buyer_dashboard"))
-        elif session.get("role") == "seller":
-            return redirect(url_for("seller_dashboard"))
-    return redirect(url_for("login"))
+    search_query = request.args.get('search', '')
+    filtered_products = [p for p in products if search_query.lower() in p['name'].lower()]
+    return render_template_string(home_html, products=filtered_products, search_query=search_query, base_html=base_html)
 
-# Login route
-@app.route("/login", methods=["GET", "POST"])
+@app.route('/login', methods=['GET', 'POST'])
 def login():
-    if request.method == "POST":
-        session["username"] = request.form["username"]
-        session["role"] = request.form["role"]
-        return redirect(url_for("home"))
-    return render_template_string(login_template)
+    return render_template_string(login_html, base_html=base_html)
 
-# Register route
-@app.route("/register", methods=["GET", "POST"])
-def register():
-    if request.method == "POST":
-        # In a real app, save user to database
-        session["username"] = request.form["username"]
-        session["role"] = request.form["role"]
-        return redirect(url_for("home"))
-    return render_template_string(register_template)
+@app.route('/seller', methods=['GET', 'POST'])
+def seller():
+    if request.method == 'POST':
+        name = request.form.get('name')
+        description = request.form.get('description')
+        cost = request.form.get('cost')
+        manufacturer = request.form.get('manufacturer')
+        image = request.form.get('image') or "https://via.placeholder.com/220"
 
-# Logout
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect(url_for("login"))
+        if name and cost:
+            products.append({
+                "name": name,
+                "description": description,
+                "cost": f"₹{cost.replace('₹','').strip()}",
+                "manufacturer": manufacturer,
+                "image": image
+            })
+            flash("Product added successfully!", "success")
+        else:
+            flash("Name and price are required!", "danger")
+        return redirect(url_for('seller'))
 
-# Buyer dashboard
-@app.route("/buyer")
-def buyer_dashboard():
-    if session.get("role") != "buyer":
-        return redirect(url_for("login"))
-    return render_template_string(dashboard_template, username=session["username"], role="buyer", products=products)
+    return render_template_string(seller_html, products=products, base_html=base_html)
 
-# Seller dashboard
-@app.route("/seller")
-def seller_dashboard():
-    if session.get("role") != "seller":
-        return redirect(url_for("login"))
-    return render_template_string(dashboard_template, username=session["username"], role="seller", products=products)
-
-# Search route
-@app.route("/search")
-def search():
-    query = request.args.get("query", "").lower()
-    results = [p for p in products if query in p["name"].lower() or query in p["description"].lower()]
-    return render_template_string(search_template, query=query, results=results)
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run(debug=True)
 
