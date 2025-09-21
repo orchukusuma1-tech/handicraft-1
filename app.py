@@ -6,6 +6,7 @@ import os
 
 app = Flask(__name__)
 app.secret_key = "supersecretkey"
+
 UPLOAD_FOLDER = "static/images"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -46,6 +47,16 @@ def init_db():
     conn.close()
 
 init_db()
+
+# ===== HOME ROUTE =====
+@app.route("/")
+def home():
+    if "role" in session:
+        if session["role"] == "seller":
+            return redirect(url_for("seller_dashboard"))
+        elif session["role"] == "buyer":
+            return redirect(url_for("buyer_dashboard"))
+    return redirect(url_for("login"))
 
 # ===== AUTHENTICATION =====
 @app.route("/register", methods=["GET", "POST"])
