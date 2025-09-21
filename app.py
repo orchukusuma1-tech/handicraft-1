@@ -11,8 +11,8 @@ products = [
         "description": "Beautifully crafted ceramic vase.",
         "cost": "₹25",
         "manufacturer": "Crafts by Kusuma",
-        "image": "https://mumbaisplash.blogspot.com/search/label/vase",
-        "link": "https://mumbaisplash.blogspot.com/search/label/vase"
+        "image": "https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2F5.imimg.com%2Fdata5%2FSELLER%2FDefault%2F2023%2F4%2F300077453%2FGH%2FYS%2FYL%2F28816920%2Fterracotta-flower-vase-1000x1000.jpg&f=1&nofb=1&ipt=ac6cbdb17e8094eb0251e240bb0e6a04718a05528716b133875e420f5fe2482d",
+       
    
     },
     {
@@ -20,8 +20,8 @@ products = [
         "description": "Durable and colorful basket for storage.",
         "cost": "₹15",
         "manufacturer": "Village Artisans",
-        "image":  "https://www.etsy.com/listing/640732864/antique-farmhouse-basket-split-oak",
-        "link":  "https://www.etsy.com/listing/640732864/antique-farmhouse-basket-split-oak"
+        "image":  "https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2F5.imimg.com%2Fdata5%2FSELLER%2FDefault%2F2024%2F10%2F462402160%2FXY%2FBE%2FIB%2F153079681%2Fhandicraft-basket-500x500.png&f=1&nofb=1&ipt=d811dda730f3133289005dfbf08a082d229533c0adb8e5fbcc1f99ed5cc08a38",
+       
     }
 ]
 
@@ -185,4 +185,5 @@ def seller():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
