@@ -11,16 +11,17 @@ products = [
         "description": "Beautifully crafted ceramic vase.",
         "cost": "₹25",
         "manufacturer": "Crafts by Kusuma",
-        "image": "https://i.imgur.com/8Km9tLL.png",
+        "image": "https://mumbaisplash.blogspot.com/search/label/vase",
         "link": "https://mumbaisplash.blogspot.com/search/label/vase"
+   
     },
     {
         "name": "Woven Basket",
         "description": "Durable and colorful basket for storage.",
         "cost": "₹15",
         "manufacturer": "Village Artisans",
-        "image": "https://i.imgur.com/Zr3r5xE.png",
-        "link": "https://www.etsy.com/listing/640732864/antique-farmhouse-basket-split-oak"
+        "image":  "https://www.etsy.com/listing/640732864/antique-farmhouse-basket-split-oak",
+        "link":  "https://www.etsy.com/listing/640732864/antique-farmhouse-basket-split-oak"
     }
 ]
 
@@ -184,3 +185,4 @@ def seller():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
