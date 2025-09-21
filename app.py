@@ -1,11 +1,10 @@
-# app.py
 from flask import Flask, render_template_string, request, redirect, url_for, session
 
 app = Flask(__name__)
-app.secret_key = "supersecretkey"
+app.secret_key = "supersecretkey"  # For session management
 
 # -------------------------------
-# Product Data
+# Embedded product data
 # -------------------------------
 products = [
     {
@@ -13,7 +12,7 @@ products = [
         "name": "Handmade Bamboo Basket",
         "description": "A strong eco-friendly basket made with love by rural artisans.",
         "price": 299,
-        "image": "https://i.ibb.co/9pFb2yQ/basket.png",
+        "image": "basket.png",
         "category": "Basket",
         "owner": "Anitha Handicrafts",
         "manager": "Ravi Kumar"
@@ -23,7 +22,7 @@ products = [
         "name": "Terracotta Vase",
         "description": "Beautifully crafted terracotta vase, perfect for home decor.",
         "price": 599,
-        "image": "https://i.ibb.co/DG3dGxF/vase.png",
+        "image": "vase.png",
         "category": "Vase",
         "owner": "Sita Pottery Works",
         "manager": "Lakshmi Devi"
@@ -31,248 +30,181 @@ products = [
 ]
 
 # -------------------------------
-# Templates (All-in-One with artistic and colorful UI)
+# Base template string
 # -------------------------------
 base_template = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>🌸 Handicrafts Store</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <!-- Bootstrap 5 -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>Handicrafts Store</title>
     <style>
         body {
-            background: linear-gradient(135deg, #fceabb, #f8b500);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(to right, #ffe0f0, #fff0e0);
+            color: #333;
+            margin: 0;
+            padding: 0 2rem;
         }
-        .navbar {
-            background: #ff6f91 !important;
-        }
-        .navbar-brand {
+        header, footer { text-align: center; padding: 1rem 0; }
+        nav a {
+            margin: 0 1rem;
+            text-decoration: none;
+            color: #ff4081;
             font-weight: bold;
-            font-size: 1.8rem;
-            color: #fff !important;
         }
-        .nav-link {
-            color: #fff !important;
-            font-weight: 500;
+        nav a:hover { text-decoration: underline; }
+        h1 { color: #ff4081; }
+        .product-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2rem;
+            justify-content: center;
+            margin-top: 1rem;
         }
-        .nav-link:hover {
-            color: #ffe5e0 !important;
-        }
-        .card {
-            border-radius: 20px;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.2);
-            transition: transform 0.2s;
-        }
-        .card:hover {
-            transform: translateY(-5px);
-        }
-        .card img {
-            border-radius: 20px 20px 0 0;
-            height: 250px;
-            object-fit: cover;
-        }
-        footer {
-            background: #ff6f91;
-            color: white;
-            padding: 20px 0;
+        .product-card {
+            background: #fff0f5;
+            border-radius: 15px;
+            padding: 1rem;
+            width: 250px;
             text-align: center;
-            font-weight: bold;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
         }
-        .btn-custom {
-            background: linear-gradient(to right, #ff8177, #ff867a, #ff8c7f, #f99185, #cf556c);
-            color: white;
-            border: none;
-        }
-        .btn-custom:hover {
-            transform: scale(1.05);
-            transition: 0.3s;
-        }
-        input[type="text"], select {
-            padding: 8px 12px;
+        .product-card img { max-width: 100%; border-radius: 10px; }
+        .cart-item {
+            background: #fff0f5;
             border-radius: 10px;
-            border: none;
-            outline: none;
-            margin-right: 10px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
         }
-        .section-title {
-            text-align: center;
-            font-weight: bold;
-            font-size: 2rem;
-            margin-bottom: 20px;
-            color: #6a0572;
-            text-shadow: 1px 1px 3px #fff;
-        }
+        form { margin-bottom: 1rem; text-align: center; }
+        input, select { padding: 0.5rem; margin: 0.2rem; }
+        button { padding: 0.5rem 1rem; background: #ff4081; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { opacity: 0.8; }
     </style>
 </head>
 <body>
+    <header>
+        <h1>🛍️ Handicrafts Store</h1>
+        <nav>
+            <a href="{{ url_for('home') }}">Home</a>
+            <a href="{{ url_for('show_products') }}">Products</a>
+            <a href="{{ url_for('show_cart') }}">Cart</a>
+            <a href="{{ url_for('about') }}">About</a>
+        </nav>
+        <hr>
+    </header>
+    
+    <main>
+        {% block content %}{% endblock %}
+    </main>
 
-<nav class="navbar navbar-expand-lg navbar-dark">
-  <div class="container">
-    <a class="navbar-brand" href="{{ url_for('home') }}">🌸 Handicrafts Store</a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-        <span class="navbar-toggler-icon"></span>
-    </button>
-    <div class="collapse navbar-collapse" id="navbarNav">
-      <ul class="navbar-nav ms-auto">
-        <li class="nav-item"><a class="nav-link" href="{{ url_for('home') }}">Home</a></li>
-        <li class="nav-item"><a class="nav-link" href="{{ url_for('product_list') }}">Products</a></li>
-        <li class="nav-item"><a class="nav-link" href="{{ url_for('cart') }}">Cart</a></li>
-        <li class="nav-item"><a class="nav-link" href="{{ url_for('about') }}">About</a></li>
-      </ul>
-    </div>
-  </div>
-</nav>
-
-<div class="container my-5">
-    {% block content %}{% endblock %}
-</div>
-
-<footer>
-    &copy; 2025 Handicrafts Store - Supporting Rural Artisans 🌸
-</footer>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js"></script>
+    <footer>
+        <hr>
+        <p>🌸 Supporting Rural Artisans | All rights reserved 2025</p>
+    </footer>
 </body>
 </html>
 """
 
 # -------------------------------
-# Home
+# Home template
 # -------------------------------
 home_template = """
-{% extends "base" %}
+{% extends base %}
 {% block content %}
-<h2 class="section-title">Discover Authentic Handmade Products</h2>
-<p class="text-center fs-5">Browse our collection of eco-friendly and traditional handicrafts made with love by rural artisans. 🌸</p>
+<h2>Discover Authentic Handmade Products</h2>
+<p>Browse our collection of eco-friendly and traditional handicrafts.</p>
 {% endblock %}
 """
 
 # -------------------------------
-# Products
+# Products template
 # -------------------------------
 products_template = """
-{% extends "base" %}
+{% extends base %}
 {% block content %}
-<h2 class="section-title">Available Products</h2>
-<form method="get" class="mb-4 text-center">
+<h2>Available Products</h2>
+
+<form method="get">
     <input type="text" name="search" placeholder="🔍 Search Products" value="{{ search_query }}">
     <select name="category">
         {% for cat in categories %}
             <option value="{{ cat }}" {% if cat == selected_category %}selected{% endif %}>{{ cat }}</option>
         {% endfor %}
     </select>
-    <button class="btn btn-custom btn-sm">Filter</button>
+    <button type="submit">Filter</button>
 </form>
 
-<div class="row">
-    {% for product in products %}
-    <div class="col-md-6 mb-4">
-        <div class="card">
-            <img src="{{ product.image }}" class="card-img-top">
-            <div class="card-body">
-                <h5 class="card-title">{{ product.name }}</h5>
-                <p class="card-text">{{ product.description }}</p>
-                <p>💰 Price: ₹{{ product.price }}</p>
-                <p>Owner: {{ product.owner }} | Manager: {{ product.manager }}</p>
-                <a href="{{ url_for('add_to_cart', product_id=product.id) }}" class="btn btn-custom">Add to Cart 🛒</a>
-            </div>
+<div class="product-grid">
+    {% if products %}
+        {% for p in products %}
+        <div class="product-card">
+            <img src="{{ url_for('static', filename='images/' ~ p.image) }}" alt="{{ p.name }}">
+            <h3>{{ p.name }}</h3>
+            <p>{{ p.description }}</p>
+            <p>💰 Price: ₹{{ p.price }}</p>
+            <p>Owner: {{ p.owner }} | Manager: {{ p.manager }}</p>
+            <a href="{{ url_for('add_to_cart', product_id=p.id) }}">Add to Cart 🛒</a>
         </div>
-    </div>
-    {% endfor %}
+        {% endfor %}
+    {% else %}
+        <p>No products found.</p>
+    {% endif %}
 </div>
-
-{% if not products %}
-<p class="text-center text-danger fs-5">No products found matching your search. ❌</p>
-{% endif %}
 {% endblock %}
 """
 
 # -------------------------------
-# Cart
+# Cart template
 # -------------------------------
 cart_template = """
-{% extends "base" %}
+{% extends base %}
 {% block content %}
-<h2 class="section-title">🛒 Your Cart</h2>
-{% if cart_items %}
-<table class="table table-striped table-hover align-middle">
-    <thead class="table-dark">
-        <tr>
-            <th>Product</th>
-            <th>Description</th>
-            <th>Price (₹)</th>
-        </tr>
-    </thead>
-    <tbody>
-    {% for item in cart_items %}
-        <tr>
-            <td>{{ item.name }}</td>
-            <td>{{ item.description }}</td>
-            <td>{{ item.price }}</td>
-        </tr>
+<h2>🛒 Your Cart</h2>
+{% if cart %}
+    {% for item in cart %}
+        <div class="cart-item">
+            <img src="{{ url_for('static', filename='images/' ~ item.image) }}" width="150">
+            <h3>{{ item.name }}</h3>
+            <p>{{ item.description }}</p>
+            <p>💰 Price: ₹{{ item.price }}</p>
+            <p>Owner: {{ item.owner }} | Manager: {{ item.manager }}</p>
+            <hr>
+        </div>
     {% endfor %}
-    </tbody>
-</table>
-<h4 class="text-end">Total: ₹{{ total }}</h4>
-<a href="{{ url_for('checkout') }}" class="btn btn-custom float-end">Proceed to Checkout ✅</a>
+    <h3>Total: ₹{{ total }}</h3>
+    <a href="{{ url_for('checkout') }}"><button>Proceed to Checkout ✅</button></a>
 {% else %}
-<p class="text-center fs-5">Your cart is empty. 🛒</p>
+    <p>Your cart is empty.</p>
 {% endif %}
-{% endblock %}
-"""
-
-# -------------------------------
-# Checkout
-# -------------------------------
-checkout_template = """
-{% extends "base" %}
-{% block content %}
-<h2 class="section-title">Checkout Complete! 🎉</h2>
-<p class="text-center fs-5">Thank you for supporting local artisans. 🌸</p>
-<a href="{{ url_for('home') }}" class="btn btn-custom d-block mx-auto">Back to Home</a>
-{% endblock %}
-"""
-
-# -------------------------------
-# About
-# -------------------------------
-about_template = """
-{% extends "base" %}
-{% block content %}
-<h2 class="section-title">About Us</h2>
-<p class="fs-5 text-center">
-🌸 Our mission is to support rural artisans by bringing their handmade crafts online.  
-Every purchase directly helps local communities grow and sustain their traditions.  
-</p>
 {% endblock %}
 """
 
 # -------------------------------
 # Routes
 # -------------------------------
-@app.route('/')
+@app.route("/")
 def home():
     return render_template_string(home_template, base=base_template)
 
-@app.route('/products')
-def product_list():
-    query = request.args.get("search", "").lower()
-    category = request.args.get("category", "All")
+@app.route("/products")
+def show_products():
+    search_query = request.args.get("search", "").strip().lower()
+    selected_category = request.args.get("category", "All")
+
     filtered = [
         p for p in products
-        if (category == "All" or p["category"] == category) and
-           (query in p["name"].lower() or query in p["description"].lower())
+        if (selected_category == "All" or p["category"] == selected_category)
+        and (search_query in p["name"].lower() or search_query in p["description"].lower())
     ]
-    categories = ["All"] + sorted(list({p["category"] for p in products}))
-    return render_template_string(products_template, base=base_template,
-                                  products=filtered, categories=categories,
-                                  selected_category=category, search_query=query)
 
-@app.route('/add_to_cart/<int:product_id>')
+    categories = ["All"] + sorted(list(set([p["category"] for p in products])))
+    return render_template_string(products_template, base=base_template, products=filtered,
+                                  categories=categories, selected_category=selected_category, search_query=search_query)
+
+@app.route("/add_to_cart/<int:product_id>")
 def add_to_cart(product_id):
     if "cart" not in session:
         session["cart"] = []
@@ -280,27 +212,26 @@ def add_to_cart(product_id):
     if product:
         session["cart"].append(product)
         session.modified = True
-    return redirect(url_for('product_list'))
+    return redirect(url_for("show_cart"))
 
-@app.route('/cart')
-def cart():
-    cart_items = session.get("cart", [])
-    total = sum(item["price"] for item in cart_items)
-    return render_template_string(cart_template, base=base_template,
-                                  cart_items=cart_items, total=total)
+@app.route("/cart")
+def show_cart():
+    cart = session.get("cart", [])
+    total = sum(item["price"] for item in cart)
+    return render_template_string(cart_template, base=base_template, cart=cart, total=total)
 
-@app.route('/checkout')
+@app.route("/checkout")
 def checkout():
     session.pop("cart", None)
-    return render_template_string(checkout_template, base=base_template)
+    return "<h1>✅ Checkout Complete! Thank you for supporting local artisans. 🙏</h1>"
 
-@app.route('/about')
+@app.route("/about")
 def about():
-    return render_template_string(about_template, base=base_template)
+    return render_template_string(home_template, base=base_template)  # Can create separate about section
 
 # -------------------------------
-# Run the app
+# Run
 # -------------------------------
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(debug=True)
 
