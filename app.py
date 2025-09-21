@@ -4,21 +4,23 @@ import os
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
-# Sample product data
+# Sample product data with links
 products = [
     {
         "name": "Handmade Vase",
         "description": "Beautifully crafted ceramic vase.",
         "cost": "₹25",
         "manufacturer": "Crafts by Kusuma",
-        "image": "https://mumbaisplash.blogspot.com/search/label/vase"
+        "image": "https://i.imgur.com/8Km9tLL.png",
+        "link": "https://mumbaisplash.blogspot.com/search/label/vase"
     },
     {
         "name": "Woven Basket",
         "description": "Durable and colorful basket for storage.",
         "cost": "₹15",
         "manufacturer": "Village Artisans",
-        "image": "https://i.imgur.com/Zr3r5xE.png"
+        "image": "https://i.imgur.com/Zr3r5xE.png",
+        "link": "https://www.etsy.com/listing/640732864/antique-farmhouse-basket-split-oak"
     }
 ]
 
@@ -52,6 +54,8 @@ def render_page(content_html, **context):
             .product-info h3 { margin:0; color:#ff6f61; }
             .product-info p { margin:5px 0; font-size:1rem; }
             .product-info span { font-weight:bold; }
+            .product-info a { display:inline-block; margin-top:5px; color:#ff6f61; text-decoration:none; font-weight:bold; }
+            .product-info a:hover { text-decoration:underline; }
             input[type="text"], input[type="number"], input[type="password"] { padding:10px; margin:5px 0; width:100%; border-radius:8px; border:1px solid #ccc; font-size:1rem; }
             button { background-color:#ff6f61; color:white; border:none; padding:12px 25px; border-radius:12px; cursor:pointer; margin-top:10px; font-size:1rem; transition:0.3s; }
             button:hover { background-color:#ff3b2e; }
@@ -103,6 +107,7 @@ def home():
                 <p><span>Description:</span> {{ product.description }}</p>
                 <p><span>Cost:</span> {{ product.cost }}</p>
                 <p><span>Manufacturer:</span> {{ product.manufacturer }}</p>
+                <a href="{{ product.link }}" target="_blank">View Product</a>
             </div>
         </div>
         {% endfor %}
@@ -132,6 +137,7 @@ def seller():
         cost = request.form.get('cost')
         manufacturer = request.form.get('manufacturer')
         image = request.form.get('image') or "https://via.placeholder.com/220"
+        link = request.form.get('link') or "#"
 
         if name and cost:
             products.append({
@@ -139,7 +145,8 @@ def seller():
                 "description": description,
                 "cost": f"₹{cost.replace('₹','').strip()}",
                 "manufacturer": manufacturer,
-                "image": image
+                "image": image,
+                "link": link
             })
             flash("Product added successfully!", "success")
         else:
@@ -154,6 +161,7 @@ def seller():
         <input type="text" name="manufacturer" placeholder="Manufacturer">
         <input type="text" name="cost" placeholder="Price in ₹" required>
         <input type="text" name="image" placeholder="Image URL (optional)">
+        <input type="text" name="link" placeholder="Product Link (optional)">
         <button type="submit">Add Product</button>
     </form>
     <h2 style="text-align:center; color:#ff6f61; margin-top:40px;">Existing Products</h2>
@@ -166,6 +174,7 @@ def seller():
                 <p><span>Description:</span> {{ product.description }}</p>
                 <p><span>Cost:</span> {{ product.cost }}</p>
                 <p><span>Manufacturer:</span> {{ product.manufacturer }}</p>
+                <a href="{{ product.link }}" target="_blank">View Product</a>
             </div>
         </div>
         {% endfor %}
@@ -175,5 +184,3 @@ def seller():
 
 if __name__ == '__main__':
     app.run(debug=True)
-
-
