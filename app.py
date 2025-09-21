@@ -1,15 +1,10 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask import Flask, render_template_string, request, redirect, url_for, session, flash
 from werkzeug.security import generate_password_hash, check_password_hash
-from werkzeug.utils import secure_filename
 import sqlite3
 import os
 
 app = Flask(__name__)
 app.secret_key = "supersecretkey"
-
-UPLOAD_FOLDER = "static/images"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 DB = "handicraft.db"
 
@@ -45,49 +40,24 @@ def init_db():
     )''')
     conn.commit()
 
-    # ===== SAMPLE DATA =====
-    # Add sample sellers if not exists
-    c.execute("SELECT * FROM users WHERE username='seller1'")
-    if not c.fetchone():
-        c.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
-                  ("seller1", generate_password_hash("password1"), "seller"))
-        c.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
-                  ("seller2", generate_password_hash("password2"), "seller"))
-    conn.commit()
-
-    # Add sample products if table empty
-    c.execute("SELECT * FROM products")
-    if not c.fetchall():
-        # Get seller ids
-        c.execute("SELECT id FROM users WHERE username='seller1'")
-        seller1_id = c.fetchone()[0]
-        c.execute("SELECT id FROM users WHERE username='seller2'")
-        seller2_id = c.fetchone()[0]
+    # Insert default seller and sample products if not exist
+    c.execute("SELECT COUNT(*) FROM users WHERE username='seller1'")
+    if c.fetchone()[0] == 0:
+        hashed_password = generate_password_hash("sellerpass")
+        c.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)", ("seller1", hashed_password, "seller"))
+        seller_id = c.lastrowid
 
         sample_products = [
-            ("Handmade Clay Vase", "Beautiful handcrafted clay vase, ideal for home decor.", 499.0, "Decor", "vase.jpg", seller1_id),
-            ("Woven Basket", "Sturdy and eco-friendly woven basket, perfect for storage.", 299.0, "Storage", "basket.jpg", seller1_id),
-            ("Wooden Key Holder", "Rustic wooden key holder, handmade with care.", 199.0, "Accessories", "keyholder.jpg", seller2_id),
-            ("Colorful Wall Hanging", "Vibrant wall hanging made of fabric and beads.", 599.0, "Decor", "wallhang.jpg", seller2_id),
+            ("Handmade Vase", "Beautiful ceramic vase.", 499.0, "Decor", "https://via.placeholder.com/150", seller_id),
+            ("Woven Basket", "Eco-friendly basket.", 299.0, "Storage", "https://via.placeholder.com/150", seller_id),
+            ("Wooden Coaster Set", "Set of 6 coasters.", 199.0, "Home", "https://via.placeholder.com/150", seller_id),
         ]
-
-        for product in sample_products:
-            c.execute("INSERT INTO products (name, description, price, category, image, owner_id) VALUES (?, ?, ?, ?, ?, ?)", product)
+        c.executemany("INSERT INTO products (name, description, price, category, image, owner_id) VALUES (?, ?, ?, ?, ?, ?)", sample_products)
 
     conn.commit()
     conn.close()
 
 init_db()
-
-# ===== HOMEPAGE =====
-@app.route("/")
-def home():
-    if "role" in session:
-        if session["role"] == "seller":
-            return redirect(url_for("seller_dashboard"))
-        else:
-            return redirect(url_for("buyer_dashboard"))
-    return redirect(url_for("login"))
 
 # ===== AUTHENTICATION =====
 @app.route("/register", methods=["GET", "POST"])
@@ -100,8 +70,7 @@ def register():
         conn = sqlite3.connect(DB)
         c = conn.cursor()
         try:
-            c.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
-                      (username, hashed_password, role))
+            c.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)", (username, hashed_password, role))
             conn.commit()
             flash("User registered successfully! Please log in.", "success")
             return redirect(url_for("login"))
@@ -109,7 +78,29 @@ def register():
             flash("Username already exists!", "danger")
         finally:
             conn.close()
-    return render_template("register.html")
+    return render_template_string("""
+    <h2>Register</h2>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <ul>
+          {% for category, message in messages %}
+            <li style="color: {% if category=='danger' %}red{% elif category=='success' %}green{% else %}blue{% endif %};">{{ message }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+    <form method="post">
+      Username: <input type="text" name="username" required><br>
+      Password: <input type="password" name="password" required><br>
+      Role: 
+      <select name="role">
+        <option value="buyer">Buyer</option>
+        <option value="seller">Seller</option>
+      </select><br>
+      <button type="submit">Register</button>
+    </form>
+    <p>Already have an account? <a href="{{ url_for('login') }}">Login here</a></p>
+    """)
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -128,7 +119,24 @@ def login():
             return redirect(url_for(f"{user[2]}_dashboard"))
         else:
             flash("Invalid credentials", "danger")
-    return render_template("login.html")
+    return render_template_string("""
+    <h2>Login</h2>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <ul>
+          {% for category, message in messages %}
+            <li style="color: {% if category=='danger' %}red{% elif category=='success' %}green{% else %}blue{% endif %};">{{ message }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+    <form method="post">
+      Username: <input type="text" name="username" required><br>
+      Password: <input type="password" name="password" required><br>
+      <button type="submit">Login</button>
+    </form>
+    <p>Don't have an account? <a href="{{ url_for('register') }}">Register here</a></p>
+    """)
 
 @app.route("/logout")
 def logout():
@@ -146,62 +154,18 @@ def seller_dashboard():
     c.execute("SELECT * FROM products WHERE owner_id=?", (session["user_id"],))
     products = c.fetchall()
     conn.close()
-    return render_template("seller_dashboard.html", products=products)
-
-@app.route("/seller/add", methods=["GET", "POST"])
-def add_product():
-    if "role" not in session or session["role"] != "seller":
-        return redirect(url_for("login"))
-    if request.method == "POST":
-        name = request.form["name"]
-        description = request.form["description"]
-        price = float(request.form["price"])
-        category = request.form["category"]
-        image_file = request.files["image"]
-        image_filename = None
-        if image_file:
-            image_filename = secure_filename(image_file.filename)
-            image_file.save(os.path.join(app.config['UPLOAD_FOLDER'], image_filename))
-        conn = sqlite3.connect(DB)
-        c = conn.cursor()
-        c.execute("INSERT INTO products (name, description, price, category, image, owner_id) VALUES (?, ?, ?, ?, ?, ?)",
-                  (name, description, price, category, image_filename, session["user_id"]))
-        conn.commit()
-        conn.close()
-        flash("Product added!", "success")
-        return redirect(url_for("seller_dashboard"))
-    return render_template("add_product.html")
-
-@app.route("/seller/edit/<int:product_id>", methods=["GET", "POST"])
-def edit_product(product_id):
-    if "role" not in session or session["role"] != "seller":
-        return redirect(url_for("login"))
-    conn = sqlite3.connect(DB)
-    c = conn.cursor()
-    c.execute("SELECT * FROM products WHERE id=? AND owner_id=?", (product_id, session["user_id"]))
-    product = c.fetchone()
-    if not product:
-        conn.close()
-        flash("Product not found", "danger")
-        return redirect(url_for("seller_dashboard"))
-    if request.method == "POST":
-        name = request.form["name"]
-        description = request.form["description"]
-        price = float(request.form["price"])
-        category = request.form["category"]
-        image_file = request.files["image"]
-        image_filename = product[5]
-        if image_file:
-            image_filename = secure_filename(image_file.filename)
-            image_file.save(os.path.join(app.config['UPLOAD_FOLDER'], image_filename))
-        c.execute("UPDATE products SET name=?, description=?, price=?, category=?, image=? WHERE id=?",
-                  (name, description, price, category, image_filename, product_id))
-        conn.commit()
-        conn.close()
-        flash("Product updated!", "success")
-        return redirect(url_for("seller_dashboard"))
-    conn.close()
-    return render_template("edit_product.html", product=product)
+    return render_template_string("""
+    <h2>Seller Dashboard</h2>
+    <a href="{{ url_for('logout') }}">Logout</a>
+    <h3>Your Products:</h3>
+    <ul>
+      {% for p in products %}
+      <li>{{ p[1] }} - ₹{{ p[3] }}<br>
+          <img src="{{ p[5] or 'https://via.placeholder.com/150' }}" width="100"><br>
+      </li>
+      {% endfor %}
+    </ul>
+    """, products=products)
 
 # ===== BUYER DASHBOARD =====
 @app.route("/buyer", methods=["GET", "POST"])
@@ -218,7 +182,26 @@ def buyer_dashboard():
         c.execute("SELECT p.*, u.username FROM products p JOIN users u ON p.owner_id=u.id")
     products = c.fetchall()
     conn.close()
-    return render_template("buyer_dashboard.html", products=products)
+    return render_template_string("""
+    <h2>Buyer Dashboard</h2>
+    <a href="{{ url_for('view_cart') }}">View Cart</a> | <a href="{{ url_for('logout') }}">Logout</a>
+    <form method="post">
+      Search: <input type="text" name="search" placeholder="Search products">
+      <button type="submit">Search</button>
+    </form>
+    <h3>Available Products:</h3>
+    <ul>
+      {% for p in products %}
+      <li>
+        <b>{{ p[1] }}</b> - ₹{{ p[3] }} | Seller: {{ p[7] }} <br>
+        <img src="{{ p[5] or 'https://via.placeholder.com/150' }}" width="100"><br>
+        <form style="display:inline" method="post" action="{{ url_for('add_to_cart', product_id=p[0]) }}">
+          <button type="submit">Add to Cart</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+    """, products=products)
 
 @app.route("/buyer/add_to_cart/<int:product_id>", methods=["POST"])
 def add_to_cart(product_id):
@@ -238,12 +221,27 @@ def view_cart():
         return redirect(url_for("login"))
     conn = sqlite3.connect(DB)
     c = conn.cursor()
-    c.execute("""SELECT cart.id, p.name, p.price FROM cart 
+    c.execute("""SELECT cart.id, p.name, p.price, p.image FROM cart 
                  JOIN products p ON cart.product_id=p.id 
                  WHERE cart.buyer_id=?""", (session["user_id"],))
     items = c.fetchall()
     conn.close()
-    return render_template("cart.html", items=items)
+    return render_template_string("""
+    <h2>Your Cart</h2>
+    <a href="{{ url_for('buyer_dashboard') }}">Back to Products</a> | <a href="{{ url_for('logout') }}">Logout</a>
+    <ul>
+      {% for item in items %}
+      <li>
+        <b>{{ item[1] }}</b> - ₹{{ item[2] }}<br>
+        <img src="{{ item[3] or 'https://via.placeholder.com/150' }}" width="100"><br>
+        <a href="{{ url_for('remove_from_cart', cart_id=item[0]) }}">Remove</a>
+      </li>
+      {% endfor %}
+    </ul>
+    <form method="post" action="{{ url_for('checkout') }}">
+      <button type="submit">Checkout</button>
+    </form>
+    """, items=items)
 
 @app.route("/buyer/cart/remove/<int:cart_id>")
 def remove_from_cart(cart_id):
@@ -262,9 +260,8 @@ def checkout():
     c.execute("DELETE FROM cart WHERE buyer_id=?", (session["user_id"],))
     conn.commit()
     conn.close()
-    flash("Checkout complete!", "success")
+    flash("Checkout successful!", "success")
     return redirect(url_for("buyer_dashboard"))
 
 if __name__ == "__main__":
     app.run(debug=True)
-
