@@ -1,4 +1,4 @@
-from flask import Flask, render_template_string, request, redirect, url_for, session, flash
+from flask import Flask, render_template, request, redirect, url_for, session, flash
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import sqlite3
@@ -44,17 +44,48 @@ def init_db():
         FOREIGN KEY(product_id) REFERENCES products(id)
     )''')
     conn.commit()
+
+    # ===== SAMPLE DATA =====
+    # Add sample sellers if not exists
+    c.execute("SELECT * FROM users WHERE username='seller1'")
+    if not c.fetchone():
+        c.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
+                  ("seller1", generate_password_hash("password1"), "seller"))
+        c.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
+                  ("seller2", generate_password_hash("password2"), "seller"))
+    conn.commit()
+
+    # Add sample products if table empty
+    c.execute("SELECT * FROM products")
+    if not c.fetchall():
+        # Get seller ids
+        c.execute("SELECT id FROM users WHERE username='seller1'")
+        seller1_id = c.fetchone()[0]
+        c.execute("SELECT id FROM users WHERE username='seller2'")
+        seller2_id = c.fetchone()[0]
+
+        sample_products = [
+            ("Handmade Clay Vase", "Beautiful handcrafted clay vase, ideal for home decor.", 499.0, "Decor", "vase.jpg", seller1_id),
+            ("Woven Basket", "Sturdy and eco-friendly woven basket, perfect for storage.", 299.0, "Storage", "basket.jpg", seller1_id),
+            ("Wooden Key Holder", "Rustic wooden key holder, handmade with care.", 199.0, "Accessories", "keyholder.jpg", seller2_id),
+            ("Colorful Wall Hanging", "Vibrant wall hanging made of fabric and beads.", 599.0, "Decor", "wallhang.jpg", seller2_id),
+        ]
+
+        for product in sample_products:
+            c.execute("INSERT INTO products (name, description, price, category, image, owner_id) VALUES (?, ?, ?, ?, ?, ?)", product)
+
+    conn.commit()
     conn.close()
 
 init_db()
 
-# ===== HOME ROUTE =====
+# ===== HOMEPAGE =====
 @app.route("/")
 def home():
     if "role" in session:
         if session["role"] == "seller":
             return redirect(url_for("seller_dashboard"))
-        elif session["role"] == "buyer":
+        else:
             return redirect(url_for("buyer_dashboard"))
     return redirect(url_for("login"))
 
@@ -78,19 +109,7 @@ def register():
             flash("Username already exists!", "danger")
         finally:
             conn.close()
-    return render_template_string("""
-    <h2>Register</h2>
-    <form method="post">
-      Username: <input type="text" name="username" required><br>
-      Password: <input type="password" name="password" required><br>
-      Role: 
-      <select name="role">
-        <option value="buyer">Buyer</option>
-        <option value="seller">Seller</option>
-      </select><br>
-      <button type="submit">Register</button>
-    </form>
-    """)
+    return render_template("register.html")
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -109,14 +128,7 @@ def login():
             return redirect(url_for(f"{user[2]}_dashboard"))
         else:
             flash("Invalid credentials", "danger")
-    return render_template_string("""
-    <h2>Login</h2>
-    <form method="post">
-      Username: <input type="text" name="username" required><br>
-      Password: <input type="password" name="password" required><br>
-      <button type="submit">Login</button>
-    </form>
-    """)
+    return render_template("login.html")
 
 @app.route("/logout")
 def logout():
@@ -134,17 +146,7 @@ def seller_dashboard():
     c.execute("SELECT * FROM products WHERE owner_id=?", (session["user_id"],))
     products = c.fetchall()
     conn.close()
-    return render_template_string("""
-    <h2>Seller Dashboard</h2>
-    <a href="{{ url_for('add_product') }}">Add New Product</a> | 
-    <a href="{{ url_for('logout') }}">Logout</a>
-    <h3>Your Products:</h3>
-    <ul>
-      {% for p in products %}
-      <li>{{ p[1] }} - ₹{{ p[3] }} | <a href="{{ url_for('edit_product', product_id=p[0]) }}">Edit</a></li>
-      {% endfor %}
-    </ul>
-    """, products=products)
+    return render_template("seller_dashboard.html", products=products)
 
 @app.route("/seller/add", methods=["GET", "POST"])
 def add_product():
@@ -168,17 +170,7 @@ def add_product():
         conn.close()
         flash("Product added!", "success")
         return redirect(url_for("seller_dashboard"))
-    return render_template_string("""
-    <h2>Add Product</h2>
-    <form method="post" enctype="multipart/form-data">
-      Name: <input type="text" name="name" required><br>
-      Description: <textarea name="description" required></textarea><br>
-      Price: <input type="number" name="price" step="0.01" required><br>
-      Category: <input type="text" name="category" required><br>
-      Image: <input type="file" name="image"><br>
-      <button type="submit">Add Product</button>
-    </form>
-    """)
+    return render_template("add_product.html")
 
 @app.route("/seller/edit/<int:product_id>", methods=["GET", "POST"])
 def edit_product(product_id):
@@ -209,19 +201,9 @@ def edit_product(product_id):
         flash("Product updated!", "success")
         return redirect(url_for("seller_dashboard"))
     conn.close()
-    return render_template_string("""
-    <h2>Edit Product</h2>
-    <form method="post" enctype="multipart/form-data">
-      Name: <input type="text" name="name" value="{{ product[1] }}" required><br>
-      Description: <textarea name="description">{{ product[2] }}</textarea><br>
-      Price: <input type="number" name="price" step="0.01" value="{{ product[3] }}" required><br>
-      Category: <input type="text" name="category" value="{{ product[4] }}" required><br>
-      Image: <input type="file" name="image"><br>
-      <button type="submit">Update Product</button>
-    </form>
-    """, product=product)
+    return render_template("edit_product.html", product=product)
 
-# ===== BUYER DASHBOARD WITH SEARCH AND CART =====
+# ===== BUYER DASHBOARD =====
 @app.route("/buyer", methods=["GET", "POST"])
 def buyer_dashboard():
     if "role" not in session or session["role"] != "buyer":
@@ -236,25 +218,7 @@ def buyer_dashboard():
         c.execute("SELECT p.*, u.username FROM products p JOIN users u ON p.owner_id=u.id")
     products = c.fetchall()
     conn.close()
-    return render_template_string("""
-    <h2>Buyer Dashboard</h2>
-    <a href="{{ url_for('view_cart') }}">View Cart</a> | <a href="{{ url_for('logout') }}">Logout</a>
-    <form method="post">
-      Search: <input type="text" name="search" placeholder="Search products">
-      <button type="submit">Search</button>
-    </form>
-    <h3>Available Products:</h3>
-    <ul>
-      {% for p in products %}
-      <li>
-        {{ p[1] }} - ₹{{ p[3] }} | Seller: {{ p[7] }} 
-        <form style="display:inline" method="post" action="{{ url_for('add_to_cart', product_id=p[0]) }}">
-          <button type="submit">Add to Cart</button>
-        </form>
-      </li>
-      {% endfor %}
-    </ul>
-    """, products=products)
+    return render_template("buyer_dashboard.html", products=products)
 
 @app.route("/buyer/add_to_cart/<int:product_id>", methods=["POST"])
 def add_to_cart(product_id):
@@ -279,20 +243,7 @@ def view_cart():
                  WHERE cart.buyer_id=?""", (session["user_id"],))
     items = c.fetchall()
     conn.close()
-    return render_template_string("""
-    <h2>Your Cart</h2>
-    <a href="{{ url_for('buyer_dashboard') }}">Back to Products</a> | <a href="{{ url_for('logout') }}">Logout</a>
-    <ul>
-      {% for item in items %}
-      <li>{{ item[1] }} - ₹{{ item[2] }} 
-        <a href="{{ url_for('remove_from_cart', cart_id=item[0]) }}">Remove</a>
-      </li>
-      {% endfor %}
-    </ul>
-    <form method="post" action="{{ url_for('checkout') }}">
-      <button type="submit">Checkout</button>
-    </form>
-    """, items=items)
+    return render_template("cart.html", items=items)
 
 @app.route("/buyer/cart/remove/<int:cart_id>")
 def remove_from_cart(cart_id):
@@ -316,3 +267,4 @@ def checkout():
 
 if __name__ == "__main__":
     app.run(debug=True)
+
