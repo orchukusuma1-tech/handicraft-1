@@ -1,10 +1,10 @@
-from flask import Flask, request, redirect, url_for, flash, render_template_string, session
+from flask import Flask, request, redirect, url_for, flash, render_template_string, session, jsonify
 import os
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
-# Sample product data
+# ---------------- Sample product data ----------------
 products = [
     {
         "id": 1,
@@ -77,6 +77,7 @@ def render_page(content_html, **context):
         <a href="{{ url_for('seller') }}">Seller</a>
         <a href="{{ url_for('cart') }}">View Cart ({{ cart_count }})</a>
         <a href="{{ url_for('login') }}">Login</a>
+        <a href="{{ url_for('chatbot') }}">Chatbot</a>
     </nav>
     <div class="container">
         {% with messages = get_flashed_messages(with_categories=true) %}
@@ -91,9 +92,9 @@ def render_page(content_html, **context):
     </body>
     </html>
     """
-    return render_template_string(base_html, cart_count=len(session.get("cart", [])), **context)
+    return render_template_string(base_html, cart_count=sum(item.get('quantity',1) for item in session.get("cart", [])), **context)
 
-# ---------------- Home ----------------
+# ---------------- Home Page with Search ----------------
 @app.route('/')
 def home():
     search_query = request.args.get('search', '')
@@ -123,13 +124,19 @@ def home():
     """
     return render_page(home_content, products=filtered_products, search_query=search_query)
 
-# ---------------- Add to Cart ----------------
+# ---------------- Add to Cart with Quantity ----------------
 @app.route('/add_to_cart/<int:product_id>', methods=['POST'])
 def add_to_cart(product_id):
     cart = session.get("cart", [])
     product = next((p for p in products if p["id"] == product_id), None)
     if product:
-        cart.append(product)
+        existing = next((item for item in cart if item["id"] == product_id), None)
+        if existing:
+            existing['quantity'] = existing.get('quantity',1) + 1
+        else:
+            product_copy = product.copy()
+            product_copy['quantity'] = 1
+            cart.append(product_copy)
         session["cart"] = cart
         flash(f"{product['name']} added to cart!", "success")
     return redirect(url_for("home"))
@@ -138,12 +145,12 @@ def add_to_cart(product_id):
 @app.route('/cart')
 def cart():
     cart_items = session.get("cart", [])
-    total = 0
-    for item in cart_items:
-        try:
-            total += int(item['price'].replace("₹", "").strip())
-        except:
-            pass
+    total = sum(int(item['price'].replace("₹","").strip())*item.get('quantity',1) for item in cart_items)
+    recommended = []
+    # Simple AI recommendation: suggest products not in cart
+    for product in products:
+        if product not in cart_items:
+            recommended.append(product)
     cart_content = """
     <h2 style="text-align:center; color:#ff6f61;">Your Cart</h2>
     {% if cart_items %}
@@ -154,6 +161,7 @@ def cart():
             <div class="product-info">
                 <h3>{{ product.name }}</h3>
                 <p><span>Price:</span> {{ product.price }}</p>
+                <p><span>Quantity:</span> {{ product.quantity }}</p>
                 <p><span>Owner:</span> {{ product.owner }}</p>
             </div>
         </div>
@@ -163,11 +171,24 @@ def cart():
     <form method="post" action="{{ url_for('checkout') }}">
         <button type="submit">Proceed to Checkout</button>
     </form>
+    <h3 style="text-align:center; color:#ff6f61; margin-top:40px;">You May Also Like</h3>
+    <div class="product-grid">
+        {% for product in recommended %}
+        <div class="product-card">
+            <img src="{{ product.image }}" alt="{{ product.name }}" class="product-image">
+            <div class="product-info">
+                <h3>{{ product.name }}</h3>
+                <p><span>Price:</span> {{ product.price }}</p>
+                <p><span>Owner:</span> {{ product.owner }}</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
     {% else %}
     <p style="text-align:center;">Your cart is empty.</p>
     {% endif %}
     """
-    return render_page(cart_content, cart_items=cart_items, total=total)
+    return render_page(cart_content, cart_items=cart_items, total=total, recommended=recommended)
 
 # ---------------- Checkout ----------------
 @app.route('/checkout', methods=['POST'])
@@ -177,7 +198,7 @@ def checkout():
     return redirect(url_for("home"))
 
 # ---------------- Login ----------------
-@app.route('/login', methods=['GET', 'POST'])
+@app.route('/login', methods=['GET','POST'])
 def login():
     login_content = """
     <h2 style="text-align:center; color:#ff6f61;">Login</h2>
@@ -190,7 +211,7 @@ def login():
     return render_page(login_content)
 
 # ---------------- Seller ----------------
-@app.route('/seller', methods=['GET', 'POST'])
+@app.route('/seller', methods=['GET','POST'])
 def seller():
     if request.method == 'POST':
         name = request.form.get('name')
@@ -203,7 +224,7 @@ def seller():
 
         if name and price:
             products.append({
-                "id": len(products) + 1,
+                "id": len(products)+1,
                 "name": name,
                 "description": description,
                 "price": f"₹{price.replace('₹','').strip()}",
@@ -216,7 +237,6 @@ def seller():
         else:
             flash("Name and price are required!", "danger")
         return redirect(url_for('seller'))
-
     seller_content = """
     <h2 style="text-align:center; color:#ff6f61;">Add New Product</h2>
     <form method="post">
@@ -247,5 +267,41 @@ def seller():
     """
     return render_page(seller_content, products=products)
 
+# ---------------- AI Chatbot ----------------
+@app.route('/chatbot', methods=['GET','POST'])
+def chatbot():
+    response = ""
+    if request.method == 'POST':
+        user_msg = request.form.get('message','').lower()
+        if "hello" in user_msg or "hi" in user_msg:
+            response = "Hello! 👋 Ask me about products, cart, or checkout."
+        elif "recommend" in user_msg:
+            cart = session.get("cart", [])
+            recommended = [p['name'] for p in products if p not in cart][:3]
+            response = "I recommend: " + ", ".join(recommended) if recommended else "Add items to cart first!"
+        elif "checkout" in user_msg:
+            response = "Go to your cart and click 'Proceed to Checkout'. 🛒"
+        else:
+            response = "I can help with products, recommendations, and checkout!"
+    chatbot_html = """
+    <h2 style="text-align:center; color:#ff6f61;">AI Chatbot 🤖</h2>
+    <form method="post">
+        <input type="text" name="message" placeholder="Type your message..." required>
+        <button type="submit">Send</button>
+    </form>
+    {% if response %}
+    <p style="margin-top:20px; background:#ffe6e1; padding:10px; border-radius:10px;">{{ response }}</p>
+    {% endif %}
+    """
+    return render_page(chatbot_html, response=response)
+
+# ---------------- Search Suggestions API ----------------
+@app.route('/search_suggestions')
+def search_suggestions():
+    query = request.args.get('q','').lower()
+    suggestions = [p['name'] for p in products if query in p['name'].lower()][:5]
+    return jsonify(suggestions)
+
+# ---------------- Run App ----------------
 if __name__ == '__main__':
     app.run(debug=True)
