@@ -1,6 +1,22 @@
-from flask import Flask, request, redirect, url_for, flash, render_template_string, session, jsonify
 import os
+from flask import Flask, request, redirect, url_for, flash, render_template_string, session, jsonify
+import openai
 
+# ---------------- OpenAI API ----------------
+openai.api_key = os.getenv("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")  # set this in environment variables
+
+def ask_gpt(message):
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": message}],
+            max_tokens=150
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+# ---------------- Flask App ----------------
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
@@ -94,10 +110,10 @@ def render_page(content_html, **context):
     """
     return render_template_string(base_html, cart_count=sum(item.get('quantity',1) for item in session.get("cart", [])), **context)
 
-# ---------------- Home Page with Search ----------------
+# ---------------- Home Page ----------------
 @app.route('/')
 def home():
-    search_query = request.args.get('search', '')
+    search_query = request.args.get('search','')
     filtered_products = [p for p in products if search_query.lower() in p['name'].lower()]
     home_content = """
     <form method="get" action="{{ url_for('home') }}">
@@ -124,7 +140,7 @@ def home():
     """
     return render_page(home_content, products=filtered_products, search_query=search_query)
 
-# ---------------- Add to Cart with Quantity ----------------
+# ---------------- Add to Cart ----------------
 @app.route('/add_to_cart/<int:product_id>', methods=['POST'])
 def add_to_cart(product_id):
     cart = session.get("cart", [])
@@ -132,7 +148,7 @@ def add_to_cart(product_id):
     if product:
         existing = next((item for item in cart if item["id"] == product_id), None)
         if existing:
-            existing['quantity'] = existing.get('quantity',1) + 1
+            existing['quantity'] += 1
         else:
             product_copy = product.copy()
             product_copy['quantity'] = 1
@@ -145,12 +161,8 @@ def add_to_cart(product_id):
 @app.route('/cart')
 def cart():
     cart_items = session.get("cart", [])
-    total = sum(int(item['price'].replace("₹","").strip())*item.get('quantity',1) for item in cart_items)
-    recommended = []
-    # Simple AI recommendation: suggest products not in cart
-    for product in products:
-        if product not in cart_items:
-            recommended.append(product)
+    total = sum(int(item['price'].replace("₹",""))*item.get('quantity',1) for item in cart_items)
+    recommended = [p for p in products if p not in cart_items]
     cart_content = """
     <h2 style="text-align:center; color:#ff6f61;">Your Cart</h2>
     {% if cart_items %}
@@ -272,17 +284,10 @@ def seller():
 def chatbot():
     response = ""
     if request.method == 'POST':
-        user_msg = request.form.get('message','').lower()
-        if "hello" in user_msg or "hi" in user_msg:
-            response = "Hello! 👋 Ask me about products, cart, or checkout."
-        elif "recommend" in user_msg:
-            cart = session.get("cart", [])
-            recommended = [p['name'] for p in products if p not in cart][:3]
-            response = "I recommend: " + ", ".join(recommended) if recommended else "Add items to cart first!"
-        elif "checkout" in user_msg:
-            response = "Go to your cart and click 'Proceed to Checkout'. 🛒"
-        else:
-            response = "I can help with products, recommendations, and checkout!"
+        user_msg = request.form.get('message','')
+        if user_msg.strip():
+            # Call GPT-4 API
+            response = ask_gpt(user_msg)
     chatbot_html = """
     <h2 style="text-align:center; color:#ff6f61;">AI Chatbot 🤖</h2>
     <form method="post">
