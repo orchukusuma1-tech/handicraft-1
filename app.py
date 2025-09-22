@@ -1,34 +1,34 @@
-from flask import Flask, request, redirect, url_for, flash, render_template_string
+from flask import Flask, request, redirect, url_for, flash, render_template_string, session
 import os
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
-# Sample product data with links
+# Sample product data
 products = [
     {
         "id": 1,
         "name": "Handmade Bamboo Basket",
         "description": "A strong eco-friendly basket made with love by rural artisans.",
-        "price": 299,
+        "price": "₹299",
         "image": "https://5.imimg.com/data5/SELLER/Default/2024/10/462402160/XY/BE/IB/153079681/handicraft-basket-500x500.png",
         "owner": "Anitha Handicrafts",
-        "manager": "Ravi Kumar"
-
+        "manager": "Ravi Kumar",
+        "link": "#"
     },
     {
-       "id": 2,
+        "id": 2,
         "name": "Terracotta Vase",
         "description": "Beautifully crafted terracotta vase, perfect for home decor.",
-        "price": 599,
+        "price": "₹599",
         "image": "https://5.imimg.com/data5/SELLER/Default/2023/4/300077453/GH/YS/YL/28816920/terracotta-flower-vase-1000x1000.jpg",
         "owner": "Sita Pottery Works",
-        "manager": "Lakshmi Devi"
-
+        "manager": "Lakshmi Devi",
+        "link": "#"
     }
 ]
 
-# Base template merged into each page
+# ---------------- Base Template ----------------
 def render_page(content_html, **context):
     base_html = """
     <!DOCTYPE html>
@@ -58,8 +58,8 @@ def render_page(content_html, **context):
             .product-info h3 { margin:0; color:#ff6f61; }
             .product-info p { margin:5px 0; font-size:1rem; }
             .product-info span { font-weight:bold; }
-            .product-info a { display:inline-block; margin-top:5px; color:#ff6f61; text-decoration:none; font-weight:bold; }
-            .product-info a:hover { text-decoration:underline; }
+            .product-info a, .product-info button { display:inline-block; margin-top:5px; color:#fff; background:#ff6f61; border:none; padding:8px 14px; border-radius:8px; text-decoration:none; cursor:pointer; }
+            .product-info a:hover, .product-info button:hover { background:#ff3b2e; }
             input[type="text"], input[type="number"], input[type="password"] { padding:10px; margin:5px 0; width:100%; border-radius:8px; border:1px solid #ccc; font-size:1rem; }
             button { background-color:#ff6f61; color:white; border:none; padding:12px 25px; border-radius:12px; cursor:pointer; margin-top:10px; font-size:1rem; transition:0.3s; }
             button:hover { background-color:#ff3b2e; }
@@ -75,6 +75,7 @@ def render_page(content_html, **context):
     <nav>
         <a href="{{ url_for('home') }}">Home</a>
         <a href="{{ url_for('seller') }}">Seller</a>
+        <a href="{{ url_for('cart') }}">View Cart ({{ cart_count }})</a>
         <a href="{{ url_for('login') }}">Login</a>
     </nav>
     <div class="container">
@@ -90,9 +91,9 @@ def render_page(content_html, **context):
     </body>
     </html>
     """
-    return render_template_string(base_html, **context)
+    return render_template_string(base_html, cart_count=len(session.get("cart", [])), **context)
 
-# Home page
+# ---------------- Home ----------------
 @app.route('/')
 def home():
     search_query = request.args.get('search', '')
@@ -109,9 +110,12 @@ def home():
             <div class="product-info">
                 <h3>{{ product.name }}</h3>
                 <p><span>Description:</span> {{ product.description }}</p>
-                <p><span>Cost:</span> {{ product.cost }}</p>
-                <p><span>Manufacturer:</span> {{ product.manufacturer }}</p>
-                <a href="{{ product.link }}" target="_blank">View Product</a>
+                <p><span>Price:</span> {{ product.price }}</p>
+                <p><span>Owner:</span> {{ product.owner }}</p>
+                <p><span>Manager:</span> {{ product.manager }}</p>
+                <form method="post" action="{{ url_for('add_to_cart', product_id=product.id) }}">
+                    <button type="submit">Add to Cart</button>
+                </form>
             </div>
         </div>
         {% endfor %}
@@ -119,7 +123,60 @@ def home():
     """
     return render_page(home_content, products=filtered_products, search_query=search_query)
 
-# Login page
+# ---------------- Add to Cart ----------------
+@app.route('/add_to_cart/<int:product_id>', methods=['POST'])
+def add_to_cart(product_id):
+    cart = session.get("cart", [])
+    product = next((p for p in products if p["id"] == product_id), None)
+    if product:
+        cart.append(product)
+        session["cart"] = cart
+        flash(f"{product['name']} added to cart!", "success")
+    return redirect(url_for("home"))
+
+# ---------------- View Cart ----------------
+@app.route('/cart')
+def cart():
+    cart_items = session.get("cart", [])
+    total = 0
+    for item in cart_items:
+        try:
+            total += int(item['price'].replace("₹", "").strip())
+        except:
+            pass
+    cart_content = """
+    <h2 style="text-align:center; color:#ff6f61;">Your Cart</h2>
+    {% if cart_items %}
+    <div class="product-grid">
+        {% for product in cart_items %}
+        <div class="product-card">
+            <img src="{{ product.image }}" alt="{{ product.name }}" class="product-image">
+            <div class="product-info">
+                <h3>{{ product.name }}</h3>
+                <p><span>Price:</span> {{ product.price }}</p>
+                <p><span>Owner:</span> {{ product.owner }}</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <h3>Total: ₹{{ total }}</h3>
+    <form method="post" action="{{ url_for('checkout') }}">
+        <button type="submit">Proceed to Checkout</button>
+    </form>
+    {% else %}
+    <p style="text-align:center;">Your cart is empty.</p>
+    {% endif %}
+    """
+    return render_page(cart_content, cart_items=cart_items, total=total)
+
+# ---------------- Checkout ----------------
+@app.route('/checkout', methods=['POST'])
+def checkout():
+    session["cart"] = []
+    flash("Checkout successful! Thank you for shopping 🙏", "success")
+    return redirect(url_for("home"))
+
+# ---------------- Login ----------------
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     login_content = """
@@ -132,23 +189,26 @@ def login():
     """
     return render_page(login_content)
 
-# Seller page
+# ---------------- Seller ----------------
 @app.route('/seller', methods=['GET', 'POST'])
 def seller():
     if request.method == 'POST':
         name = request.form.get('name')
         description = request.form.get('description')
-        cost = request.form.get('cost')
-        manufacturer = request.form.get('manufacturer')
+        price = request.form.get('price')
+        owner = request.form.get('owner')
+        manager = request.form.get('manager')
         image = request.form.get('image') or "https://via.placeholder.com/220"
         link = request.form.get('link') or "#"
 
-        if name and cost:
+        if name and price:
             products.append({
+                "id": len(products) + 1,
                 "name": name,
                 "description": description,
-                "cost": f"₹{cost.replace('₹','').strip()}",
-                "manufacturer": manufacturer,
+                "price": f"₹{price.replace('₹','').strip()}",
+                "owner": owner or "Unknown",
+                "manager": manager or "Unknown",
                 "image": image,
                 "link": link
             })
@@ -162,8 +222,9 @@ def seller():
     <form method="post">
         <input type="text" name="name" placeholder="Product Name" required>
         <input type="text" name="description" placeholder="Description">
-        <input type="text" name="manufacturer" placeholder="Manufacturer">
-        <input type="text" name="cost" placeholder="Price in ₹" required>
+        <input type="text" name="owner" placeholder="Owner">
+        <input type="text" name="manager" placeholder="Manager">
+        <input type="text" name="price" placeholder="Price in ₹" required>
         <input type="text" name="image" placeholder="Image URL (optional)">
         <input type="text" name="link" placeholder="Product Link (optional)">
         <button type="submit">Add Product</button>
@@ -176,9 +237,9 @@ def seller():
             <div class="product-info">
                 <h3>{{ product.name }}</h3>
                 <p><span>Description:</span> {{ product.description }}</p>
-                <p><span>Cost:</span> {{ product.cost }}</p>
-                <p><span>Manufacturer:</span> {{ product.manufacturer }}</p>
-                <a href="{{ product.link }}" target="_blank">View Product</a>
+                <p><span>Price:</span> {{ product.price }}</p>
+                <p><span>Owner:</span> {{ product.owner }}</p>
+                <p><span>Manager:</span> {{ product.manager }}</p>
             </div>
         </div>
         {% endfor %}
@@ -188,4 +249,3 @@ def seller():
 
 if __name__ == '__main__':
     app.run(debug=True)
-
